@@ -1,0 +1,310 @@
+---
+title: "swell predictions"
+author: "Gabe Mednick"
+date: "10/14/2020"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+library(rnoaa)
+library(tidyverse)
+library(ncdf4)
+library("leaflet")
+
+theme_set(theme_light())
+options(noaakey = "ymjfKdbwNDSSFZLvhFrbJJeEpYSOPdkn")
+
+```
+```{r}
+vignette('rnoaa')
+```
+
+```{r}
+library(lubridate)
+# Get buoy station information
+x <- buoy_stations()  %>% drop_na()
+# refresh stations as needed, takes a while to run
+# you shouldn't need to update very often
+# x <- buoy_stations(refresh = TRUE)
+
+leaflet(data = na.omit(x)) %>% 
+             addTiles() %>% 
+             addCircles(~lon, ~lat, opacity = 0.5) 
+
+# by trial and error, I found buoys that are around Santa Cruz
+west_coast <- buoy_stations() %>% 
+    filter(between(lon, -150, -122) & between(lat, 20, 37.5)) 
+
+
+leaflet(data = na.omit(west_coast)) %>% 
+  addTiles() %>% 
+  addMarkers(~lon, ~lat)
+
+# using the first buoy result and the "swden' dataset argument:
+hb_period <- buoy(dataset = "swden", buoyid = 46012, year = 9999) 
+
+wave_data$data %>% 
+  arrange(desc(time))
+
+leaflet(data = na.omit(west_coast)) %>% 
+  addTiles() %>% 
+  addMarkers(~lon, ~lat)
+
+sc_period <- buoy(dataset = "swden", buoyid = 46042, year = 9999)
+sc_period$data %>%  tail(1000) %>% arrange(desc(time))
+```
+
+
+```{r}
+library(plotly)
+sc_waves <- buoy(dataset = "stdmet", buoyid = 46042, year = 9999)
+
+sc <- sc_waves$data %>% tail(n= 10000) %>% 
+  mutate(time = as.Date(time)) %>% 
+  rename(date = time) %>% 
+  arrange(desc(date)) %>% 
+  drop_na(wave_height)
+
+sc %>% 
+  drop_na(wind_spd) %>% 
+  group_by(date) %>% 
+  summarize(wind_spd = mean(wind_spd),
+            wind_dir = mean(wind_dir),
+            gust = mean(gust)) %>% 
+  ungroup() %>% 
+  ggplot(aes(date, wind_spd, fill = gust)) +
+  geom_col()
+
+sc %>% 
+  group_by(date) %>% 
+  summarize(wave_height = mean(wave_height),
+            dominant_wpd = mean(dominant_wpd)) %>% 
+  ungroup() %>% 
+  ggplot(aes(date, wave_height, color = dominant_wpd)) +
+  geom_line() +
+  scale_color_gradient2(low="green", mid="black",
+                     high="red", midpoint = 12, space ="Lab")
+
+
+col <- sc %>% 
+  group_by(date) %>% 
+  filter(date > '2020-11-15') %>% 
+  summarize(wave_height = mean(wave_height),
+            dominant_wpd = mean(dominant_wpd)) %>% 
+  ungroup() %>% 
+  ggplot(aes(date, wave_height, fill = dominant_wpd)) +
+  geom_col() +
+    scale_fill_gradient2(low="blue", mid="turquoise",
+                     high="light blue", midpoint = 12, space ="Lab")
+
+ggplotly(col)
+```
+
+```{r}
+# https://bovineaerospace.wordpress.com/tag/noaa/
+library(rNOMADS)
+library(GEOmap)
+ 
+model.urls <- GetDODSDates("wave")
+latest.model <- model.urls$url[14]
+model.runs <- GetDODSModelRuns(latest.model) # Eastern N. Pacific
+latest.model.run <- tail(model.runs$model.run, 1)
+time <- c(0,0)
+lon <- c(0, 274)
+lat <- c(0, 202)
+ 
+wave.data <- DODSGrab(latest.model, latest.model.run,
+"htsgwsfc", time, lon, lat)
+wave.grid <- ModelGrid(wave.data, c(0.25, 0.25))
+#Remove "no data" values
+wave.grid$z[which(wave.grid$z>1e10, arr.ind=TRUE)] <- NA
+colormap <- rainbow(500, start=0, end=5/6)
+image(wave.grid$x, sort(wave.grid$y), wave.grid$z[1,1,,], col = colormap,
+xlab = "Longitude", ylab = "Latitude",
+main = paste("Wave Height:", wave.grid$model.run.date))
+plotGEOmap(coastmap, border = "black", add = TRUE,
+MAPcol = "black")
+
+```
+
+```{r}
+plotGEOmap(MAP, LIM = c(-180, -90, 180, 90) ,
+shiftlon = 0, add = TRUE ,
+NUMB = FALSE , SEL = NULL, MAPcol = NULL,
+MAPstyle = NULL, border=NA,
+PLOT = TRUE, PRINT=FALSE, BB = FALSE, ...)
+
+library(geomapdata)
+
+data(coastmap)
+
+plotGEOmap(coastmap , xaxs='i', yaxs='i')
+coastmap$STROKES$col[coastmap$STROKES$code=="C" ] = rgb(1, .6, .6)
+coastmap$STROKES$col[coastmap$STROKES$code=="c" ] = rgb(1, .9, .9)
+coastmap$STROKES$col[coastmap$STROKES$code=="L" ] = rgb(.6, .6, 1)
+
+plot(c(-30, 370), c(-85, 85), type='n', ann=FALSE,  xaxs='i', yaxs='i')
+
+plotGEOmap(coastmap , border='black' , add=TRUE)
+title(xlab="Longitude", ylab="Latitude" )
+grid()
+
+a <- plot_usmap(region = 'counties', include = 'CA', labels = FALSE)
+ggplotly(a)
+```
+
+```{r}
+# https://bovineaerospace.wordpress.com/tag/noaa/
+library(rNOMADS)
+library(GEOmap)
+ 
+model.urls <- GetDODSDates("wave")
+latest.model <- model.urls$url[42]
+model.runs <- GetDODSModelRuns(latest.model) # Eastern N. Pacific
+latest.model.run <- tail(model.runs$model.run, 1)
+time <- c(0,0)
+lon <- c(0, 274)
+lat <- c(0, 202)
+ 
+wave.data <- DODSGrab(latest.model, latest.model.run,
+"htsgwsfc", time, lon, lat)
+wave.grid <- ModelGrid(wave.data, c(0.25, 0.25))
+#Remove "no data" values
+wave.grid$z[which(wave.grid$z>1e10, arr.ind=TRUE)] <- NA
+colormap <- rainbow(500, start=0, end=5/6)
+image(wave.grid$x, sort(wave.grid$y), wave.grid$z[1,1,,], col = colormap,
+xlab = "Longitude", ylab = "Latitude",
+main = paste("Wave Height:", wave.grid$model.run.date))
+plotGEOmap(coastmap, border = "black", add = TRUE,
+MAPcol = "black")
+```
+
+
+```{r}
+# Get available buoys
+buoys(dataset = 'cwind')
+
+# Get data for a buoy
+## if no year or datatype specified, we get the first file
+buoy(dataset = 'cwind', buoyid = 46085)
+
+# Including specific year
+bouy <- buoy(dataset = 'cwind', buoyid = 41001, year = 1999)
+
+# Including specific year and datatype
+buoy(dataset = 'cwind', buoyid = 45005, year = 2008, datatype = "c")
+buoy(dataset = 'cwind', buoyid = 41001, year = 1997, datatype = "c")
+
+# Other datasets
+buoy(dataset = 'ocean', buoyid = 41029)
+
+# curl debugging
+buoy(dataset = 'cwind', buoyid = 46085, verbose = TRUE)
+
+# some buoy ids are character, case doesn't matter, we'll account for it
+buoy(dataset = "stdmet", buoyid = "VCAF1")
+buoy(dataset = "stdmet", buoyid = "wplf1")
+buoy(dataset = "dart", buoyid = "dartu")
+
+
+
+## End(Not run)
+```
+
+```{r}
+buoy_stations() %>% View()
+buoy(dataset = "swden", buoyid = 46042)
+
+buoy(dataset = "stdmet", buoyid = 46042, year=9999)
+
+
+buoy(dataset = 'stdmet', buoyid = 46114, verbose = TRUE)
+```
+```{r}
+#Example data (poverty rates)
+county_data<-read.csv("https://www.ers.usda.gov/webdocs/DataFiles/48747/PovertyEstimates.csv?v=2529") %>% #
+  filter(Area_name != "United States") %>%
+  select(FIPStxt, Stabr, Area_name, PCTPOVALL_2018) %>%
+  rename(fips = FIPStxt)
+
+states <- plot_usmap("states", 
+                     color = "red",
+                     fill = alpha(0.01)) #this parameter is necessary to get counties to show on top of states
+counties <- plot_usmap(data = county_data, 
+                       values = "PCTPOVALL_2018",
+                       color = "black",
+                       size = 0.1)
+```
+
+
+```{r}
+# Find the datasets: https://www.r-project.org/nosvn/pandoc/rnoaa.html
+
+buoy(dataset = 'stdmet', buoyid = '46114')
+
+```
+
+```{r}
+library(ggmap)
+
+a <- buoy(dataset = "swden", buoyid = 46042, year = 2020)
+
+ggmap::register_google(key = "AIzaSyBH1FdnRUCeDvdJMBJhf-qbUhV7ZgAEwcA")
+# Coordinates for location of interest
+monterey <- c(lon = -122, lat = 36.8)
+# 1. Download the relevant map
+monterey_map <- get_map(location = monterey, zoom = 10)
+# 2. Display the map
+ggmap(monterey_map) +
+  geom_point(aes(x = lon, y = lat, colour = mean_wave_dir), data = a$data, alpha = .5)
+```
+
+
+```{r}
+
+library(ggmap)
+ggmap::register_google(key = "AIzaSyBH1FdnRUCeDvdJMBJhf-qbUhV7ZgAEwcA")
+# Coordinates for location of interest
+nyc <- c(lon = -74.0059, lat = 40.7128)
+# 1. Download the relevant map
+nyc_map <- get_map(location = nyc, zoom = 10)
+# 2. Display the map
+ggmap(nyc_map)
+
+```
+
+```{r}
+# install.packages(c("maps", "mapdata"))
+library(maps)
+library(mapdata)
+states <- map_data("state")
+ggplot(data = states) + 
+  geom_polygon(aes(x = long, y = lat, fill = region, group = group), color = "white") + 
+  coord_quickmap() +
+  guides(fill = FALSE)
+
+ca_df <- states %>%
+  filter(region == "california")
+
+counties <- map_data("county")
+ca_county <- counties %>%
+  filter(region == "california")
+         
+ca_base <- ggplot(data = ca_df, mapping = aes(x = long, y = lat, group = group)) +
+  coord_quickmap() + 
+  geom_polygon(color = "black", fill = "gray")
+ca_base + theme_void()
+
+ca_base + theme_void() + 
+  geom_polygon(data = ca_county, fill = NA, color = "white") +
+  geom_polygon(color = "black", fill = NA)  # get the state border back on top
+
+```
+```{r}
+# githubinstall::gh_install_packages("rnoaa", ref = "waves")
+```
+
