@@ -1,9 +1,8 @@
+# This app uses ocean data from NOAA's National Data Buoy Center (NDBC) to assess
+# current surf and wind conditions for Central California. As well, the surf 
+# prediction data generated from NOAA's Wave Watch III (WWIII) model is visualized
+# for the Eastern N. Pacific. 
 
-
-### This post explores ocean data from NOAA's National Data Buoy Center (NDBC) relevant to surf prediction for Central California. The R package, rnoaa, is used to access buoy data while rNOMADS is used to access surf prediction data generated from NOAA's wave watch III (WWIII) model. Let's start by plotting the WWIII data. 
-
-
-# https://bovineaerospace.wordpress.com/tag/noaa/
 library(rNOMADS)
 library(GEOmap)
 library(plotly)
@@ -11,10 +10,17 @@ library(shiny)
 library(rnoaa)
 library(shinydashboard)
 library(dashboardthemes)
-theme_set(theme_light())
 library(leaflet)
-library(tidyverse)
+library(ggplot2)
+library(dplyr)
+library(tidyr)
 library(ncdf4)
+library(htmltools)
+theme_set(theme_light())
+
+
+# This post explains how to plot the NOAA's Wave Watch III model data: 
+# https://bovineaerospace.wordpress.com/tag/noaa/
 
 swell_map <- function(tbl) { 
   model.urls <- GetDODSDates("wave")
@@ -38,6 +44,10 @@ swell_map <- function(tbl) {
              MAPcol = "black") 
 }
 
+# Here we access data from NOAA's National Data Buoy Center. We will use data 
+# streaming from buoy 46042
+
+# Leaflet map of buoys around Santa Cruz
 west_coast <- buoy_stations() %>% 
   filter(between(lon, -150, -122) & between(lat, 20, 37.5)) 
 
@@ -46,17 +56,21 @@ central_coast <- leaflet(data = na.omit(west_coast),
                                                   minZoom = 8, maxZoom = 8,
                                                   dragging = FALSE)) %>% 
   addTiles() %>% 
-  addCircleMarkers(~lon, ~lat)
+  addCircleMarkers(~lon, ~lat, label = ~htmlEscape(paste0('buoyID: ', station))) %>%
+  addScaleBar('bottomleft') %>%
+  addControl('NDBC buoys near SC', position = "topleft")
 
-
+# import data from buoy 46042
 sc_waves <- buoy(dataset = "stdmet", buoyid = 46042, year = 9999)
 
+# Clean data
 sc <- sc_waves$data %>% tail(n= 10000) %>% 
   mutate(time = as.Date(time)) %>% 
   rename(date = time) %>% 
   arrange(desc(date)) %>% 
   drop_na(wave_height)
 
+# Plot wind data
 wind_data <- sc %>% 
   drop_na(wind_spd) %>% 
   group_by(date) %>% 
@@ -68,14 +82,14 @@ wind_data <- sc %>%
   geom_col() +
 #  geom_line(aes(group = wind_spd), alpha = 0.5, size = 1) +
   scale_fill_viridis_c(name = "Wind gusts",
-                       option = "D") +
+                       option = "C") +
   
   labs(
     x = '',
     y = 'Wind speed'
   )
 
-
+# Plot wave and wave period data
 waves_col <- sc %>% 
   group_by(date) %>% 
 #  filter(date > '2020-11-15') %>% 
@@ -86,25 +100,27 @@ waves_col <- sc %>%
   geom_col() +
 #  geom_line(alpha = 0.5, size = 1) +
   scale_fill_viridis_c(name = "Wave period",
-                       option = "C") +
+                       option = "D") +
   
   labs(
     x = '',
     y = 'Wave height'
   )
 
-wave_data <- sc %>% 
-  group_by(date) %>% 
-  summarize(wave_height = mean(wave_height),
-            dominant_wpd = mean(dominant_wpd)) %>% 
-  ungroup() %>% 
-  ggplot(aes(date, wave_height, fill = dominant_wpd)) +
-  geom_col() +
-  geom_line(alpha = 0.5, size = 1.5) +
-  scale_color_gradient2(low="green", mid="black",
-                        high="red", midpoint = 12, space ="Lab")
+# Removing this plot
+# wave_data <- sc %>% 
+#   group_by(date) %>% 
+#   summarize(wave_height = mean(wave_height),
+#             dominant_wpd = mean(dominant_wpd)) %>% 
+#   ungroup() %>% 
+#   ggplot(aes(date, wave_height, fill = dominant_wpd)) +
+#   geom_col() +
+#   geom_line(alpha = 0.5, size = 1.5) +
+#   scale_color_gradient2(low="green", mid="black",
+#                         high="red", midpoint = 12, space ="Lab")
+# 
 
-
+# Creating dashboard
 ui <- dashboardPage(
   dashboardHeader(title = h2("Santa Cruz Surf and Wind Reporter")),
   dashboardSidebar(
@@ -116,9 +132,9 @@ ui <- dashboardPage(
                  leafletOutput('sc_buoys')),
     box("wave prediction map",
                  plotOutput("WWIII"))), 
-    fluidRow(box("Surf height and period",
+    fluidRow(box("Surf height and period from buoy 46042",
                  plotlyOutput("buoy")),
-    box("wind data",
+    box("wind data from buoy 46042",
                  plotlyOutput("wind")))
   ))
 

@@ -5,9 +5,8 @@ account: biolight-informatics
 server: shinyapps.io
 hostUrl: https://api.shinyapps.io/v1
 appId: 3424119
-bundleId: 4017959
+bundleId: 4021434
 url: https://biolight-informatics.shinyapps.io/surf_reporter/
-when: 1608622583.89237
+when: 1608704953.31937
 asMultiple: FALSE
 asStatic: FALSE
-ignoredFiles: surf_app.Rmd|surf_scrape_r.R|swell_shot.Rmd
