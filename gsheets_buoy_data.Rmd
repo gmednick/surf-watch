@@ -1,0 +1,61 @@
+---
+title: "googlesheets for hosting data"
+author: "Gabe Mednick"
+date: "12/28/2020"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+library(readr)
+library(tidyr)
+library(rnoaa)
+library(rNOMADS)
+library(dplyr)
+library(googlesheets4)
+gs4_auth()
+```
+
+```{r}
+wave_hgt_period <- gs4_get('https://docs.google.com/spreadsheets/d/1xhFx2bvq0h7pXYby-NDD9GUIKvrDTn54Dy3WCT6Tvq8/edit#gid=0')
+
+# import data wave, period, wind and wind direction data from buoy 46042
+sc_waves <- buoy(dataset = "stdmet", buoyid = 46042, year = 9999, limit=500, add_units = TRUE)
+
+# Clean data
+sc <- sc_waves$data %>% tail(n= 10000) %>% 
+  mutate(time = as.Date(time)) %>% 
+  rename(date = time) %>% 
+  arrange(desc(date)) %>% 
+  drop_na(wave_height) 
+
+range_write(wave_hgt_period, sc)
+```
+```{r}
+
+wave_dir <- gs4_get("https://docs.google.com/spreadsheets/d/1TK0JW4ByrXUUWHgzu33cahgYJ-CGip3N6ar4Tba7W4M/edit#gid=0")
+# Import wave direction data 
+sc_dir <- buoy(dataset = "swden", buoyid = 46042, year = 9999)
+
+sc_swell_dir <- sc_dir$mean_wave_dir %>%  tail(n = 10000) %>% arrange(desc(time)) %>% 
+  drop_na(principal_wave_dir) %>% 
+  slice_head(n = 1) %>% 
+  select(wave_direction = mean_wave_dir) 
+
+range_write(wave_dir, sc_swell_dir)
+```
+
+```{r}
+# wwIII_pacific_model <- gs4_get("https://docs.google.com/spreadsheets/d/1KF4b-0P-AFbrOx_ddlZ29C-XrsTDs1WaPvJAV1AbO9M/edit#gid=0")
+# # Import urls for WWIII models
+# model.urls <- GetDODSDates("wave") 
+# 
+# 
+# range_write(wwIII_pacific_model, model.urls)
+```
+
+
+
